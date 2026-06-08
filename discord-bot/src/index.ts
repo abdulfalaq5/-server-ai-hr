@@ -9,7 +9,7 @@ import {
 import { config } from './config.js';
 import { slashCommandsList, handleSlashCommand } from './commands/slash.js';
 import { StorageService } from './services/storage.js';
-import { HRAssistantService } from './services/hr.js';
+import { OpenClawService } from './services/openclaw.js';
 
 // Initialize Discord Client
 const client = new Client({
@@ -172,10 +172,9 @@ client.on('messageCreate', async (message) => {
   const session = StorageService.getConversation(message.author.id, 'hr');
 
   try {
-    // Forward to HR Assistant
-    const reply = await HRAssistantService.chat(
+    // Forward to OpenClaw → HR Assistant RAG
+    const reply = await OpenClawService.chat(
       message.author.id,
-      userEmail,
       cleanContent,
       session.messages
     );

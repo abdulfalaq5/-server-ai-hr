@@ -1,0 +1,28 @@
+# OpenClaw Configuration - HR Assistant
+# This file is read-only mounted into the container.
+# All secrets come from environment variables, not this file.
+
+[llm]
+provider = "openai"
+model = "hr-assistant"
+base_url = "http://hr-assistant:9004"
+api_key = "local"
+max_tokens = 4096
+temperature = 0.1
+
+[agent]
+system_prompt = """
+Kamu adalah HR Assistant AI yang membantu karyawan menjawab pertanyaan seputar kebijakan dan peraturan perusahaan.
+
+Kamu HANYA menjawab berdasarkan dokumen HR yang tersedia di knowledge base.
+
+Jika informasi tidak ditemukan dalam dokumen, katakan dengan jelas: "Saya tidak menemukan informasi tersebut pada dokumen HR yang tersedia."
+
+Jangan mengarang jawaban atau memberikan informasi yang tidak ada di dokumen HR.
+
+Selalu sopan, formal, dan gunakan Bahasa Indonesia.
+"""
+
+[ui]
+port = 9001
+host = "0.0.0.0"

@@ -1,0 +1,79 @@
+{
+  "agents": {
+    "defaults": {
+      "workspace": "/home/node/.openclaw/workspace"
+    }
+  },
+  "channels": {
+    "discord": {
+      "enabled": "__DISCORD_ENABLED__",
+      "token": "${DISCORD_BOT_TOKEN}",
+      "dmPolicy": "allowlist",
+      "allowFrom": [
+        "${DISCORD_ALLOWED_USER_1}",
+        "${DISCORD_ALLOWED_USER_2}",
+        "${DISCORD_ALLOWED_USER_3}",
+        "${DISCORD_ALLOWED_USER_4}",
+        "${DISCORD_ALLOWED_USER_5}"
+      ]
+    }
+  },
+  "gateway": {
+    "mode": "local",
+    "auth": {
+      "mode": "token",
+      "token": "${OPENCLAW_GATEWAY_TOKEN}"
+    },
+    "port": 9001,
+    "bind": "lan",
+    "tailscale": {
+      "mode": "off",
+      "resetOnExit": false
+    },
+    "http": {
+      "endpoints": {
+        "chatCompletions": {
+          "enabled": true
+        }
+      }
+    }
+  },
+  "models": {
+    "providers": {
+      "hr-rag": {
+        "api": "openai-completions",
+        "baseUrl": "http://hr-assistant:9004",
+        "apiKey": "local",
+        "models": [
+          {
+            "id": "hr-assistant",
+            "name": "HR Assistant (RAG)"
+          }
+        ]
+      }
+    }
+  },
+  "session": {
+    "dmScope": "per-channel-peer"
+  },
+  "tools": {
+    "profile": "none",
+    "deny": [
+      "write",
+      "write_file",
+      "edit",
+      "edit_file",
+      "apply_patch",
+      "group:runtime"
+    ]
+  },
+  "skills": {
+    "install": {
+      "nodeManager": "npm"
+    }
+  },
+  "meta": {
+    "lastTouchedVersion": "2026.6.1",
+    "lastTouchedAt": "2026-06-08T00:00:00.000Z"
+  }
+}

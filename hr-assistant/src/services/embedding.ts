@@ -1,64 +1,73 @@
-import axios from 'axios';
-// @ts-ignore
-import { pipeline } from '@xenova/transformers';
-import { config } from '../config/index.js';
+import { EmbeddingModel, FlagEmbedding } from 'fastembed';
 
-let localPipeline: any = null;
+// ============================================================
+// FastEmbed Configuration
+// ============================================================
+// Model: paraphrase-multilingual-MiniLM-L12-v2
+// - Dimension: 384
+// - Multilingual: supports Bahasa Indonesia
+// - Lightweight: ~120MB, fast inference
+// - Symmetric: same embedding for query and passage
+// ============================================================
+
+export const EMBEDDING_MODEL = EmbeddingModel.ParaphraseMLMiniLML12V2;
+export const EMBEDDING_DIM = 384;
+
+let embeddingInstance: FlagEmbedding | null = null;
 
 /**
- * Generates text embeddings locally using ONNX runtime and Xenova/all-MiniLM-L6-v2 model.
- * Run completely locally and privately inside the container.
+ * Lazy-initialize the FastEmbed model.
+ * Model is downloaded once and cached in /tmp/fastembed-cache inside the container.
  */
-async function getLocalEmbedding(text: string): Promise<number[]> {
-  if (!localPipeline) {
-    console.log(`[Embedding] Loading local ONNX model 'Xenova/all-MiniLM-L6-v2'...`);
-    // Model will be cached locally in node_modules or system cache
-    localPipeline = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
-    console.log(`[Embedding] Local ONNX model loaded successfully.`);
+async function getModel(): Promise<FlagEmbedding> {
+  if (!embeddingInstance) {
+    console.log(`[FastEmbed] Initializing model: paraphrase-multilingual-MiniLM-L12-v2 ...`);
+    embeddingInstance = await FlagEmbedding.init({
+      model: EMBEDDING_MODEL,
+      cacheDir: '/tmp/fastembed-cache',
+    });
+    console.log(`[FastEmbed] Model loaded. Dimension: ${EMBEDDING_DIM}`);
   }
-
-  const output = await localPipeline(text, {
-    pooling: 'mean',
-    normalize: true,
-  });
-
-  return Array.from(output.data);
+  return embeddingInstance;
 }
 
 /**
- * Generate a vector embedding for the given text.
- * Tries the remote OpenAI compatible API first, falling back to local ONNX if it fails.
+ * Generate a single embedding vector for a query string.
+ * Used during RAG retrieval (search phase).
  */
 export async function getEmbedding(text: string): Promise<number[]> {
-  if (config.openaiApiKey) {
-    try {
-      const url = `${config.openaiBaseUrl}/embeddings`;
-      const response = await axios.post(
-        url,
-        {
-          input: text.replace(/\n/g, ' '),
-          model: config.openaiEmbeddingModel,
-        },
-        {
-          headers: {
-            'Authorization': `Bearer ${config.openaiApiKey}`,
-            'Content-Type': 'application/json',
-          },
-          timeout: 10000, // 10 seconds timeout before fallback
-        }
-      );
+  const model = await getModel();
+  // queryEmbed uses query-prefix if the model supports it (better retrieval precision)
+  const vector = await model.queryEmbed(text);
+  return Array.from(vector);
+}
 
-      const embedding = response.data?.data?.[0]?.embedding;
-      if (embedding && Array.isArray(embedding)) {
-        return embedding;
-      }
-    } catch (error: any) {
-      const msg = error.response?.data?.error?.message || error.message;
-      console.warn(`[Embedding] Remote embedding failed (${msg}). Falling back to local ONNX embeddings...`);
+/**
+ * Generate embeddings for a batch of texts efficiently.
+ * Used during document ingestion (indexing phase).
+ * Returns an array of number[] vectors in the same order as input texts.
+ */
+export async function getBatchEmbeddings(texts: string[]): Promise<number[][]> {
+  if (texts.length === 0) return [];
+
+  const model = await getModel();
+  const results: number[][] = [];
+
+  // fastembed.embed() is an async generator yielding batches of Float32Array
+  const embeddings = model.embed(texts, 32); // batch size 32
+  for await (const batch of embeddings) {
+    for (const vec of batch) {
+      results.push(Array.from(vec));
     }
-  } else {
-    console.log(`[Embedding] No API key configured. Using local ONNX embeddings...`);
   }
 
-  return await getLocalEmbedding(text);
+  return results;
+}
+
+/**
+ * Returns the embedding vector dimension.
+ * Used when creating Qdrant collections.
+ */
+export function getEmbeddingDimension(): number {
+  return EMBEDDING_DIM;
 }

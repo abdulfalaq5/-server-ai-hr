@@ -1,5 +1,11 @@
 # =============================================================================
-# SERVER AI MONITORING - Docker Compose
+# HR ASSISTANT AI - Docker Compose
+# =============================================================================
+# Services:
+#   - qdrant-hr      : Vector database (port 9005)
+#   - hr-assistant   : RAG backend + OpenAI-compatible API (port 9004)
+#   - openclaw       : AI agent Web UI + gateway (port 9002)
+#   - discord-bot    : Discord relay → OpenClaw
 # =============================================================================
 # Usage:
 #   cp .env.example .env && nano .env
@@ -7,28 +13,6 @@
 # =============================================================================
 
 services:
-  # ---------------------------------------------------------------------------
-  # Discord Bot Service (HR Assistant interface)
-  # ---------------------------------------------------------------------------
-  discord-bot:
-    build:
-      context: ./discord-bot
-      dockerfile: Dockerfile
-    container_name: discord-bot
-    restart: unless-stopped
-    env_file:
-      - .env
-    environment:
-      NODE_ENV: production
-      DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN}
-      DISCORD_ALERT_CHANNEL_ID: ${DISCORD_ALERT_CHANNEL_ID}
-      DISCORD_ADMIN_USERS: ${DISCORD_ADMIN_USERS}
-      EMAIL_WHITELIST: ${EMAIL_WHITELIST}
-    volumes:
-      - ./storage:/app/storage
-    networks:
-      - infra_net
-
   # ---------------------------------------------------------------------------
   # Qdrant Vector Database for HR
   # ---------------------------------------------------------------------------
@@ -44,7 +28,7 @@ services:
       - infra_net
 
   # ---------------------------------------------------------------------------
-  # HR Assistant Service
+  # HR Assistant Service (RAG + OpenAI-compatible API)
   # ---------------------------------------------------------------------------
   hr-assistant:
     build:
@@ -63,11 +47,97 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       OPENAI_BASE_URL: ${OPENAI_BASE_URL}
       OPENAI_MODEL: ${OPENAI_MODEL}
-      OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
+      DOCUMENTS_PATH: /documents
     volumes:
       - ./documents:/documents
     depends_on:
       - qdrant-hr
+    networks:
+      - infra_net
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9004/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+
+  # ---------------------------------------------------------------------------
+  # OpenClaw - AI Agent Web UI & Gateway
+  # ---------------------------------------------------------------------------
+  openclaw:
+    image: ghcr.io/openclaw/openclaw:latest
+    container_name: openclaw-hr
+    restart: unless-stopped
+    environment:
+      OPENCLAW_CONFIG_PATH: /home/node/openclaw.json
+      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL}
+      OPENAI_MODEL: ${OPENAI_MODEL}
+      DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN}
+      DISCORD_ENABLED: "false"
+    command: >
+      sh -c "
+      export DISCORD_ALLOWED_USER_1='none';
+      export DISCORD_ALLOWED_USER_2='none';
+      export DISCORD_ALLOWED_USER_3='none';
+      export DISCORD_ALLOWED_USER_4='none';
+      export DISCORD_ALLOWED_USER_5='none';
+      i=1;
+      OLD_IFS=\"$$IFS\";
+      IFS=',';
+      for user in $$DISCORD_ALLOWED_USERS; do
+        if [ $$i -le 5 ]; then
+          export DISCORD_ALLOWED_USER_$$i=\"$$user\";
+        fi;
+        i=$$((i+1));
+      done;
+      IFS=\"$$OLD_IFS\";
+      node /home/node/.openclaw/generate-config.js;
+      exec node openclaw.mjs gateway --allow-unconfigured --bind lan
+      "
+    volumes:
+      - ./openclaw/config:/home/node/.openclaw
+    ports:
+      - "${OPENCLAW_PORT:-9002}:9001"
+    depends_on:
+      hr-assistant:
+        condition: service_healthy
+    networks:
+      - infra_net
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:9001/healthz').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    security_opt:
+      - no-new-privileges:true
+
+  # ---------------------------------------------------------------------------
+  # Discord Bot Service (relay → OpenClaw)
+  # ---------------------------------------------------------------------------
+  discord-bot:
+    build:
+      context: ./discord-bot
+      dockerfile: Dockerfile
+    container_name: discord-bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN}
+      DISCORD_ALERT_CHANNEL_ID: ${DISCORD_ALERT_CHANNEL_ID}
+      DISCORD_ADMIN_USERS: ${DISCORD_ADMIN_USERS}
+      EMAIL_WHITELIST: ${EMAIL_WHITELIST}
+      OPENCLAW_API_URL: http://openclaw-hr:9001
+      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN}
+    volumes:
+      - ./storage:/app/storage
+    depends_on:
+      openclaw:
+        condition: service_healthy
     networks:
       - infra_net
 

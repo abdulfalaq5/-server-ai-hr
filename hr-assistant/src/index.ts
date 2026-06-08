@@ -18,7 +18,7 @@ app.get('/health', (_req: Request, res: Response) => {
   res.json({ status: 'healthy', service: 'hr-assistant', version: '1.0.0' });
 });
 
-// Query endpoint for RAG chatbot
+// Query endpoint for RAG chatbot (internal / direct use)
 app.post('/query', async (req: Request, res: Response, next: NextFunction) => {
   const { query, history } = req.body;
 
@@ -31,6 +31,62 @@ app.post('/query', async (req: Request, res: Response, next: NextFunction) => {
     log.info(`Received query: "${query}"`);
     const answer = await queryHR(query, history || []);
     res.json({ answer });
+  } catch (error: any) {
+    next(error);
+  }
+});
+
+// OpenAI-compatible Chat Completions endpoint
+// Used by OpenClaw as the LLM provider — it sends messages here and we run RAG
+app.post('/v1/chat/completions', async (req: Request, res: Response, next: NextFunction) => {
+  const { messages } = req.body;
+
+  if (!messages || !Array.isArray(messages) || messages.length === 0) {
+    res.status(400).json({ error: { message: 'Missing or invalid parameter: messages' } });
+    return;
+  }
+
+  // Extract the last user message as the query
+  const userMessages = messages.filter((m: any) => m.role === 'user');
+  const lastUserMessage = userMessages[userMessages.length - 1]?.content || '';
+
+  if (!lastUserMessage) {
+    res.status(400).json({ error: { message: 'No user message found in messages array' } });
+    return;
+  }
+
+  // Build history (exclude last user message to avoid duplication)
+  const history = messages
+    .filter((m: any) => m.role !== 'system')
+    .slice(0, -1)
+    .map((m: any) => ({ role: m.role as 'user' | 'assistant', content: m.content }));
+
+  try {
+    log.info(`[OpenAI Compat] Query from OpenClaw: "${lastUserMessage.substring(0, 80)}..."`);
+    const answer = await queryHR(lastUserMessage, history);
+
+    // Return in OpenAI chat completion format
+    res.json({
+      id: `chatcmpl-hr-${Date.now()}`,
+      object: 'chat.completion',
+      created: Math.floor(Date.now() / 1000),
+      model: 'hr-assistant',
+      choices: [
+        {
+          index: 0,
+          message: {
+            role: 'assistant',
+            content: answer,
+          },
+          finish_reason: 'stop',
+        },
+      ],
+      usage: {
+        prompt_tokens: 0,
+        completion_tokens: 0,
+        total_tokens: 0,
+      },
+    });
   } catch (error: any) {
     next(error);
   }

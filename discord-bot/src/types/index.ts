@@ -8,6 +8,8 @@ export interface BotConfig {
   alertChannelId: string;
   adminUsers: string[];
   emailWhitelist: string[];
+  openclawApiUrl: string;
+  openclawToken: string;
 }
 
 export interface UserEmailMap {

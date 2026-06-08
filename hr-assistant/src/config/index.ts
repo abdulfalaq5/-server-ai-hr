@@ -1,24 +1,34 @@
 import dotenv from 'dotenv';
 import path from 'path';
 
-// Load env files in development
+// Load .env in non-production environments
 if (process.env.NODE_ENV !== 'production') {
   dotenv.config();
-  // Try loading from root folder as fallback
   dotenv.config({ path: path.resolve(process.cwd(), '../.env') });
 }
 
 export const config = {
   nodeEnv: process.env.NODE_ENV || 'production',
   port: parseInt(process.env.PORT || '9004', 10),
+
+  // ── LLM (OpenRouter / OpenAI compatible) ──
   openaiApiKey: process.env.OPENAI_API_KEY || '',
-  openaiBaseUrl: process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1',
+  openaiBaseUrl: process.env.OPENAI_BASE_URL || 'https://openrouter.ai/api/v1',
   openaiModel: process.env.OPENAI_MODEL || 'openai/gpt-oss-120b:free',
-  openaiEmbeddingModel: process.env.OPENAI_EMBEDDING_MODEL || 'text-embedding-3-small',
+
+  // ── Qdrant Vector DB ──
   qdrantUrl: process.env.QDRANT_URL || 'http://localhost:6333',
+
+  // ── Documents ──
+  documentsPath: process.env.DOCUMENTS_PATH || '/documents',
 };
 
-// Validate API configuration
+// Startup validation
 if (!config.openaiApiKey) {
-  console.warn('[WARN] OPENAI_API_KEY is missing. LLM calls will fail.');
+  console.warn('[Config] ⚠ OPENAI_API_KEY is not set. LLM answers will fail.');
 }
+
+console.log(`[Config] LLM  : ${config.openaiBaseUrl} → ${config.openaiModel}`);
+console.log(`[Config] DB   : ${config.qdrantUrl}`);
+console.log(`[Config] Docs : ${config.documentsPath}`);
+console.log(`[Config] Embed: FastEmbed (paraphrase-multilingual-MiniLM-L12-v2, local)`);
