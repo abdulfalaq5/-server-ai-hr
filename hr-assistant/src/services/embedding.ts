@@ -3,15 +3,15 @@ import { EmbeddingModel, FlagEmbedding } from 'fastembed';
 // ============================================================
 // FastEmbed Configuration
 // ============================================================
-// Model: paraphrase-multilingual-MiniLM-L12-v2
-// - Dimension: 384
-// - Multilingual: supports Bahasa Indonesia
-// - Lightweight: ~120MB, fast inference
+// Model: multilingual-e5-large (MLE5Large)
+// - Dimension: 768
+// - Multilingual: supports Bahasa Indonesia and 100+ languages
+// - High quality: strong multilingual retrieval performance
 // - Symmetric: same embedding for query and passage
 // ============================================================
 
-export const EMBEDDING_MODEL = EmbeddingModel.ParaphraseMLMiniLML12V2;
-export const EMBEDDING_DIM = 384;
+export const EMBEDDING_MODEL = EmbeddingModel.MLE5Large;
+export const EMBEDDING_DIM = 768;
 
 let embeddingInstance: FlagEmbedding | null = null;
 
@@ -21,7 +21,7 @@ let embeddingInstance: FlagEmbedding | null = null;
  */
 async function getModel(): Promise<FlagEmbedding> {
   if (!embeddingInstance) {
-    console.log(`[FastEmbed] Initializing model: paraphrase-multilingual-MiniLM-L12-v2 ...`);
+    console.log(`[FastEmbed] Initializing model: multilingual-e5-large ...`);
     embeddingInstance = await FlagEmbedding.init({
       model: EMBEDDING_MODEL,
       cacheDir: '/tmp/fastembed-cache',
