@@ -1,0 +1,27 @@
+{
+  "name": "hr-assistant",
+  "version": "1.0.0",
+  "description": "RAG-based AI HR Assistant for policy querying",
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx watch src/index.ts",
+    "ingest": "tsx src/ingest.ts"
+  },
+  "dependencies": {
+    "@qdrant/js-client-rest": "^1.12.0",
+    "axios": "^1.7.9",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.2",
+    "pdf-parse": "^1.1.1",
+    "word-extractor": "^1.0.4"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.10.1",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}
