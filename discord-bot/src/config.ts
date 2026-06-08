@@ -16,8 +16,6 @@ export const config: BotConfig = {
   discordToken: process.env.DISCORD_BOT_TOKEN || '',
   alertChannelId: process.env.DISCORD_ALERT_CHANNEL_ID || '',
   adminUsers: parseCsv(process.env.DISCORD_ADMIN_USERS),
-  openclawApiUrl: process.env.OPENCLAW_API_URL || 'http://openclaw:9001',
-  openclawToken: process.env.OPENCLAW_GATEWAY_TOKEN || 'ccca5288d47247abee7fbaac3b08abe24134f2791948261c',
   emailWhitelist: parseCsv(process.env.EMAIL_WHITELIST),
 };
 

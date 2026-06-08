@@ -1,41 +1,64 @@
 import axios from 'axios';
+// @ts-ignore
+import { pipeline } from '@xenova/transformers';
 import { config } from '../config/index.js';
 
+let localPipeline: any = null;
+
 /**
- * Generate a vector embedding for the given text using the configured OpenAI compatible endpoint.
+ * Generates text embeddings locally using ONNX runtime and Xenova/all-MiniLM-L6-v2 model.
+ * Run completely locally and privately inside the container.
+ */
+async function getLocalEmbedding(text: string): Promise<number[]> {
+  if (!localPipeline) {
+    console.log(`[Embedding] Loading local ONNX model 'Xenova/all-MiniLM-L6-v2'...`);
+    // Model will be cached locally in node_modules or system cache
+    localPipeline = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
+    console.log(`[Embedding] Local ONNX model loaded successfully.`);
+  }
+
+  const output = await localPipeline(text, {
+    pooling: 'mean',
+    normalize: true,
+  });
+
+  return Array.from(output.data);
+}
+
+/**
+ * Generate a vector embedding for the given text.
+ * Tries the remote OpenAI compatible API first, falling back to local ONNX if it fails.
  */
 export async function getEmbedding(text: string): Promise<number[]> {
-  if (!config.openaiApiKey) {
-    throw new Error('OPENAI_API_KEY is not configured. Cannot generate embeddings.');
-  }
-
-  const url = `${config.openaiBaseUrl}/embeddings`;
-
-  try {
-    const response = await axios.post(
-      url,
-      {
-        input: text.replace(/\n/g, ' '), // Replace newlines to ensure clean input
-        model: config.openaiEmbeddingModel,
-      },
-      {
-        headers: {
-          'Authorization': `Bearer ${config.openaiApiKey}`,
-          'Content-Type': 'application/json',
+  if (config.openaiApiKey) {
+    try {
+      const url = `${config.openaiBaseUrl}/embeddings`;
+      const response = await axios.post(
+        url,
+        {
+          input: text.replace(/\n/g, ' '),
+          model: config.openaiEmbeddingModel,
         },
-        timeout: 20000,
+        {
+          headers: {
+            'Authorization': `Bearer ${config.openaiApiKey}`,
+            'Content-Type': 'application/json',
+          },
+          timeout: 10000, // 10 seconds timeout before fallback
+        }
+      );
+
+      const embedding = response.data?.data?.[0]?.embedding;
+      if (embedding && Array.isArray(embedding)) {
+        return embedding;
       }
-    );
-
-    const embedding = response.data?.data?.[0]?.embedding;
-    if (!embedding || !Array.isArray(embedding)) {
-      throw new Error(`Invalid response schema from embedding API: ${JSON.stringify(response.data)}`);
+    } catch (error: any) {
+      const msg = error.response?.data?.error?.message || error.message;
+      console.warn(`[Embedding] Remote embedding failed (${msg}). Falling back to local ONNX embeddings...`);
     }
-
-    return embedding;
-  } catch (error: any) {
-    const detail = error.response?.data?.error?.message || error.response?.data || error.message;
-    console.error(`[Embedding] Error creating embedding:`, detail);
-    throw new Error(`Failed to generate embedding: ${detail}`);
+  } else {
+    console.log(`[Embedding] No API key configured. Using local ONNX embeddings...`);
   }
+
+  return await getLocalEmbedding(text);
 }

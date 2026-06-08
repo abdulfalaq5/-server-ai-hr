@@ -1,25 +1,19 @@
 import fs from 'fs';
 import path from 'path';
-import { UserEmailMap, ConversationSession, AlertState } from '../types/index.js';
+import { UserEmailMap, ConversationSession } from '../types/index.js';
 
 const STORAGE_DIR = '/app/storage';
 const DISCORD_DIR = path.join(STORAGE_DIR, 'discord');
-const ALERTS_DIR = path.join(STORAGE_DIR, 'alerts');
 
 const PATHS = {
   users: path.join(DISCORD_DIR, 'users.json'),
-  channels: path.join(DISCORD_DIR, 'channels.json'),
   conversations: path.join(DISCORD_DIR, 'conversations.json'),
-  alertState: path.join(ALERTS_DIR, 'alert-state.json'),
 };
 
 // Ensure directories exist
 function initStorage() {
   if (!fs.existsSync(DISCORD_DIR)) {
     fs.mkdirSync(DISCORD_DIR, { recursive: true });
-  }
-  if (!fs.existsSync(ALERTS_DIR)) {
-    fs.mkdirSync(ALERTS_DIR, { recursive: true });
   }
 }
 
@@ -91,7 +85,7 @@ export class StorageService {
     }
   }
 
-  static getConversation(discordId: string, mode: 'monitoring' | 'hr' = 'monitoring'): ConversationSession {
+  static getConversation(discordId: string, mode: 'monitoring' | 'hr' = 'hr'): ConversationSession {
     const sessions = this.getConversations();
     const sessionId = `${discordId}-${mode}`;
     let session = sessions.find(s => s.discordId === sessionId);
@@ -105,7 +99,7 @@ export class StorageService {
     return session;
   }
 
-  static saveConversation(session: ConversationSession, mode: 'monitoring' | 'hr' = 'monitoring') {
+  static saveConversation(session: ConversationSession, mode: 'monitoring' | 'hr' = 'hr') {
     const sessions = this.getConversations();
     const sessionId = session.discordId.endsWith(`-${mode}`) ? session.discordId : `${session.discordId}-${mode}`;
     session.discordId = sessionId;
@@ -133,50 +127,5 @@ export class StorageService {
       );
     }
     this.saveConversations(sessions);
-  }
-
-  // --- Alert State ---
-  static getAlertState(): AlertState {
-    try {
-      if (fs.existsSync(PATHS.alertState)) {
-        const data = fs.readFileSync(PATHS.alertState, 'utf8');
-        return JSON.parse(data);
-      }
-    } catch (err) {
-      console.error('[Storage] Error reading alert-state.json:', err);
-    }
-    return {
-      activeAlerts: {},
-      cpuHighConsecutiveCount: 0,
-    };
-  }
-
-  static saveAlertState(state: AlertState) {
-    try {
-      fs.writeFileSync(PATHS.alertState, JSON.stringify(state, null, 2), 'utf8');
-    } catch (err) {
-      console.error('[Storage] Error writing alert-state.json:', err);
-    }
-  }
-
-  // --- Channels ---
-  static getChannels(): string[] {
-    try {
-      if (fs.existsSync(PATHS.channels)) {
-        const data = fs.readFileSync(PATHS.channels, 'utf8');
-        return JSON.parse(data);
-      }
-    } catch (err) {
-      console.error('[Storage] Error reading channels.json:', err);
-    }
-    return [];
-  }
-
-  static saveChannels(channels: string[]) {
-    try {
-      fs.writeFileSync(PATHS.channels, JSON.stringify(channels, null, 2), 'utf8');
-    } catch (err) {
-      console.error('[Storage] Error writing channels.json:', err);
-    }
   }
 }

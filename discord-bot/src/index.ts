@@ -9,8 +9,6 @@ import {
 import { config } from './config.js';
 import { slashCommandsList, handleSlashCommand } from './commands/slash.js';
 import { StorageService } from './services/storage.js';
-import { OpenClawService } from './services/openclaw.js';
-import { AlertService } from './services/alert.js';
 import { HRAssistantService } from './services/hr.js';
 
 // Initialize Discord Client
@@ -46,13 +44,10 @@ async function deploySlashCommands() {
 }
 
 client.once('ready', async () => {
-  console.log(`[Discord] Bot is logged in as ${client.user?.tag}!`);
+  console.log(`[Discord] HR Assistant Bot is logged in as ${client.user?.tag}!`);
 
   // Register Slash Commands
   await deploySlashCommands();
-
-  // Start background alert loop
-  AlertService.start(client);
 });
 
 // Handle Slash Command Interactions
@@ -125,18 +120,15 @@ client.on('messageCreate', async (message) => {
   // Check if message is intended for the bot:
   // 1. Direct Message (DM)
   // 2. Mention of the bot in any channel
-  // 3. Any message in a channel named 'ai-monitoring'
-  // 4. Any message in a channel named 'hr-assistant'
+  // 3. Any message in a channel named 'hr-assistant'
   const isMentioned = message.mentions.has(client.user!);
-  const isAiChannel = message.channel && 'name' in message.channel && message.channel.name === 'ai-monitoring';
   const isHrChannel = message.channel && 'name' in message.channel && message.channel.name === 'hr-assistant';
 
-  if (!isDM && !isMentioned && !isAiChannel && !isHrChannel) {
+  if (!isDM && !isMentioned && !isHrChannel) {
     return;
   }
 
-  const mode = isHrChannel ? 'hr' : 'monitoring';
-  console.log(`[Discord] Inbound chat message from ${message.author.tag} in ${isDM ? 'DM' : 'Guild Channel'} [Mode: ${mode}]`);
+  console.log(`[Discord] Inbound chat message from ${message.author.tag} in ${isDM ? 'DM' : 'Guild Channel'}`);
 
   // 1. Verification checks
   if (!hasGuildAccessRole(message)) {
@@ -169,35 +161,24 @@ client.on('messageCreate', async (message) => {
 
   // Clear session if they type "reset" or "clear"
   if (cleanContent.toLowerCase() === 'reset' || cleanContent.toLowerCase() === 'clear') {
-    StorageService.clearConversation(message.author.id, mode);
-    return message.reply(`🧹 Sesi percakapan [${mode.toUpperCase()}] Anda telah dibersihkan.`);
+    StorageService.clearConversation(message.author.id, 'hr');
+    return message.reply('🧹 Sesi percakapan HR Anda telah dibersihkan.');
   }
 
   // Send typing indicator to show thinking state
   await message.channel.sendTyping();
 
-  // Load active conversation
-  const session = StorageService.getConversation(message.author.id, mode);
+  // Load active conversation (always HR mode for this dedicated assistant)
+  const session = StorageService.getConversation(message.author.id, 'hr');
 
   try {
-    let reply = '';
-    if (mode === 'hr') {
-      // Forward to HR Assistant
-      reply = await HRAssistantService.chat(
-        message.author.id,
-        userEmail,
-        cleanContent,
-        session.messages
-      );
-    } else {
-      // Forward to OpenClaw
-      reply = await OpenClawService.chat(
-        message.author.id,
-        userEmail,
-        cleanContent,
-        session.messages
-      );
-    }
+    // Forward to HR Assistant
+    const reply = await HRAssistantService.chat(
+      message.author.id,
+      userEmail,
+      cleanContent,
+      session.messages
+    );
 
     // Save history (limited to last 20 messages to prevent token bloat)
     session.messages.push({ role: 'user', content: cleanContent });
@@ -205,13 +186,13 @@ client.on('messageCreate', async (message) => {
     if (session.messages.length > 20) {
       session.messages = session.messages.slice(-20);
     }
-    StorageService.saveConversation(session, mode);
+    StorageService.saveConversation(session, 'hr');
 
     // Send formatted reply
     sendSplitMessage(message, reply);
 
   } catch (error: any) {
-    console.error(`[Discord] Chat handling error [Mode: ${mode}]:`, error.message);
+    console.error('[Discord] Chat handling error:', error.message);
     await message.reply(`❌ Terjadi kesalahan saat memproses chat Anda: ${error.message}`);
   }
 });
