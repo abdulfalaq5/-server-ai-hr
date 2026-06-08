@@ -57,15 +57,7 @@
     "dmScope": "per-channel-peer"
   },
   "tools": {
-    "profile": "none",
-    "deny": [
-      "write",
-      "write_file",
-      "edit",
-      "edit_file",
-      "apply_patch",
-      "group:runtime"
-    ]
+    "profile": "minimal"
   },
   "skills": {
     "install": {
